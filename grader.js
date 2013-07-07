@@ -24,8 +24,10 @@ References:
 var fs = require('fs');
 var program = require('commander');
 var cheerio = require('cheerio');
+var rest = require('restler');
 var HTMLFILE_DEFAULT = "index.html";
 var CHECKSFILE_DEFAULT = "checks.json";
+var SAVEFILE_DEFAULT = "save.html";
 
 var assertFileExists = function(infile) {
     var instr = infile.toString();
@@ -55,6 +57,19 @@ var checkHtmlFile = function(htmlfile, checksfile) {
     return out;
 };
 
+var downloadHtml = function(url, checksfile) {
+  rest.get(url).on('complete', function(result) {
+    if (result instanceof Error) {
+      sys.puts('Error: ' + result.message);
+      this.retry(5000); // try again after 5 sec
+    } else {
+      fs.writeFileSync(SAVEFILE_DEFAULT, result);  
+      var out = checkHtmlFile(SAVEFILE_DEFAULT, checksfile)
+console.log(out);
+    }
+  });
+}
+
 var clone = function(fn) {
     // Workaround for commander.js issue.
     // http://stackoverflow.com/a/6772648
@@ -65,10 +80,17 @@ if(require.main == module) {
     program
         .option('-f, --file <html_file>', 'Path to index.html', clone(assertFileExists), HTMLFILE_DEFAULT)
         .option('-c, --checks <check_file>', 'Path to checks.json', clone(assertFileExists), CHECKSFILE_DEFAULT)
-        .parse(process.argv);
-    var checkJson = checkHtmlFile(program.file, program.checks);
+        .option('-u, --url <check_file>', 'Path to checks.json')
+       .parse(process.argv);
+    if ( program.url === undefined ) {
+        var checkJson = checkHtmlFile(program.file, program.checks);
+    } else {
+        var checkJson = downloadHtml(program.url, program.checks);
+    }
     var outJson = JSON.stringify(checkJson, null, 4);
-    console.log(outJson);
+    if (outJson !== undefined){
+        console.log(outJson);
+    }
 } else {
     exports.checkHtmlFile = checkHtmlFile;
 }
